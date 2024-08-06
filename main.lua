@@ -80,6 +80,7 @@ local function sendClientTextureData(pid, target_id)
 end
 
 function initSendClientTextureData(pid, target_id, livery_id)
+    TEXTURE_TRANSFER_PROGRESS[pid] = TEXTURE_TRANSFER_PROGRESS[pid] or {}
     TEXTURE_TRANSFER_PROGRESS[pid][target_id] = { progress = 0, livery_id = livery_id }
     sendClientTextureData(pid, target_id)
 end
