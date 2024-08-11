@@ -111,10 +111,8 @@ function BP_clientReady(pid)
         informRegistry(pid)
     end
 
-    if #TEXTURE_MAP > 0 then
-        for serverID, liveryData in pairs(TEXTURE_MAP) do
-            initSendClientTextureData(pid, serverID, liveryData.liveryID)
-        end
+    for serverID, liveryData in pairs(TEXTURE_MAP) do
+        initSendClientTextureData(pid, serverID, liveryData.liveryID)
     end
 end
 
