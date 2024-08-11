@@ -18,6 +18,7 @@ local TEXTURE_MAP = {}
 local TEXTURE_TRANSFER_PROGRESS = {}
 local DISCORD_IDS = {}
 local NOT_REGISTERED = {}
+local INFORMED = {}
 
 -- Thanks Bouboule for this function
 function httpRequest(url)
@@ -105,15 +106,15 @@ function BP_clientReady(pid)
 
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
 
-    for serverID, liveryData in pairs(TEXTURE_MAP) do
-        initSendClientTextureData(pid, serverID, liveryData.liveryID)
+    local pname = MP.GetPlayerName(pid)
+    if NOT_REGISTERED[pname] then
+        informRegistry(pid)
     end
-end
 
-function BP_informRegistry()
-    for pid, idc in pairs(NOT_REGISTERED) do
-        MP.SendChatMessage(pid, "You have not linked your Discord account to your BeamMP account!")
-        MP.SendChatMessage(pid, "See https://beampaint.com/onboarding/ for more info.")
+    if #TEXTURE_MAP > 0 then
+        for serverID, liveryData in pairs(TEXTURE_MAP) do
+            initSendClientTextureData(pid, serverID, liveryData.liveryID)
+        end
     end
 end
 
@@ -151,6 +152,15 @@ function BP_setLiveryUsed(pid, data)
     end
 end
 
+function informRegistry(pid)
+    if INFORMED[pid] == nil then
+        print("Informing client " .. pid .. " of BeamPaint registry")
+        INFORMED[pid] = true
+
+        MP.TriggerClientEvent(pid, "BP_informSignup", "")
+    end
+end
+
 function onPlayerAuth(pname, prole, is_guest, identifiers)
     if not is_guest then
         if identifiers["discord"] ~= nil then
@@ -170,9 +180,5 @@ end
 MP.RegisterEvent("BP_clientReady", "BP_clientReady")
 MP.RegisterEvent("BP_setLiveryUsed", "BP_setLiveryUsed")
 MP.RegisterEvent("BP_textureDataReceived", "BP_textureDataReceived")
-MP.RegisterEvent("BP_informRegistry", "BP_informRegistry")
 MP.RegisterEvent("onPlayerAuth", "onPlayerAuth")
 MP.RegisterEvent("onVehicleDeleted", "onVehicleDeleted")
-
-MP.CancelEventTimer("BP_informRegistry")
-MP.CreateEventTimer("BP_informRegistry", 5000)
