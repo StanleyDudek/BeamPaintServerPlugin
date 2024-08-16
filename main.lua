@@ -20,6 +20,8 @@ local DISCORD_IDS = {}
 local NOT_REGISTERED = {}
 local INFORMED = {}
 
+local ROLE_MAP = {}
+
 -- Thanks Bouboule for this function
 function httpRequest(url)
     local response = ""
@@ -92,6 +94,21 @@ function sendEveryoneLivery(serverID, liveryID)
     end
 end
 
+function updatePlayerRole(pid, targetPid, targetVid)
+    if ROLE_MAP[targetPid] == nil then return end
+    local data = {}
+    data.tid = "" .. targetPid .. "-" .. targetVid
+    if ROLE_MAP[targetPid] == "admin" then data["isAdmin"] = true end
+    -- data.name = MP.GetPlayerName(pid)
+    MP.TriggerClientEventJson(pid, "BP_setPremium", data)
+end
+
+function updatePlayerRoleAll(targetPid, targetVid)
+    for pid, pname in pairs(MP.GetPlayers()) do
+        updatePlayerRole(pid, targetPid, targetVid)
+    end
+end
+
 function BP_textureDataReceived(pid, target_id)
     if TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress < #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id] then
         sendClientTextureData(pid, target_id)
@@ -113,6 +130,13 @@ function BP_clientReady(pid)
 
     for serverID, liveryData in pairs(TEXTURE_MAP) do
         initSendClientTextureData(pid, serverID, liveryData.liveryID)
+    end
+
+    for tpid, role in pairs(ROLE_MAP) do
+        for tvid, vdata in pairs(MP.GetPlayerVehicles(tpid) or {}) do
+            print("hi " .. tpid .. "-" .. tvid)
+            updatePlayerRole(pid, tpid, tvid)
+        end
     end
 end
 
@@ -170,13 +194,56 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
     end
 end
 
+function onPlayerJoining(pid)
+    local pname = MP.GetPlayerName(pid)
+    local discordID = DISCORD_IDS[pname]
+    if discordID then
+        print("pid: " .. pid)
+        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. discordID)
+        print(resp)
+        local parsed = Util.JsonDecode(resp)
+
+        local isAdmin = parsed["admin"] or false
+        local hasPremium = parsed["premium"] or false
+
+        if hasPremium then ROLE_MAP[pid] = "premium" end
+        if isAdmin then ROLE_MAP[pid] = "admin" end
+    end
+end
+
+function onPlayerDisconnect(pid)
+    ROLE_MAP[pid] = nil
+end
+
 function onVehicleDeleted(pid, vid)
     local serverID = "" .. pid .. "-" .. vid
     TEXTURE_MAP[serverID] = nil
 end
 
+function onVehicleSpawn(tpid, tvid)
+    updatePlayerRoleAll(tpid, tvid)
+end
+
+function onInit()
+    for pid, pname in pairs(MP.GetPlayers()) do
+        local role = "" -- We don't use this anyway :3
+        local is_guest = MP.IsPlayerGuest(pid)
+        local identifiers = MP.GetPlayerIdentifiers(pid)
+        onPlayerAuth(pname, role, is_guest, identifiers)
+    end
+
+    for pid, pname in pairs(MP.GetPlayers()) do
+        onPlayerJoining(pid)
+    end
+end
+
+MP.RegisterEvent("onInit", "onInit")
 MP.RegisterEvent("BP_clientReady", "BP_clientReady")
 MP.RegisterEvent("BP_setLiveryUsed", "BP_setLiveryUsed")
 MP.RegisterEvent("BP_textureDataReceived", "BP_textureDataReceived")
 MP.RegisterEvent("onPlayerAuth", "onPlayerAuth")
 MP.RegisterEvent("onVehicleDeleted", "onVehicleDeleted")
+MP.RegisterEvent("onPlayerJoining", "onPlayerJoining")
+MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
+MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
+-- MP.RegisterEvent("BP_requestVehRole", "BP_requestVehRole")
