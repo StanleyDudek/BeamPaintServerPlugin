@@ -6,12 +6,6 @@ local BEAMPAINT_URL = "https://beampaint.com"
 -- Maximum amount of bytes sent as values in JSON message
 local MAX_DATA_VALUES_PP = 12000
 
--- local TEST_DATA = {}
--- local inp = io.open("Resources/Server/BeamPaintServerPlugin/covet_skin_gradient_striped_1k_png.png", "rb")
--- TEST_DATA = inp:read("*all")
--- inp:close()
--- print("TEST_DATA size: " .. #TEST_DATA)
-
 local LIVERY_DATA = {}
 
 local TEXTURE_MAP = {}
@@ -70,11 +64,6 @@ local function sendClientTextureData(pid, target_id)
     local data = {}
     data.target_id = target_id
     data.raw_offset = TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress
-    -- data.raw = {}
-    -- for i=data.raw_offset,math.min(data.raw_offset + MAX_DATA_VALUES_PP, #TEST_DATA) do
-    --     table.insert(data.raw, TEST_DATA[i])
-    --     -- table.insert(data.raw, 1)
-    -- end
     local raw = LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]:sub(data.raw_offset + 1, math.min(data.raw_offset + MAX_DATA_VALUES_PP, #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]))
     data.raw = base64.encode(raw)
     MP.TriggerClientEventJson(pid, "BP_receiveTextureData", data)
@@ -99,7 +88,6 @@ function updatePlayerRole(pid, targetPid, targetVid)
     local data = {}
     data.tid = "" .. targetPid .. "-" .. targetVid
     if ROLE_MAP[targetPid] == "admin" then data["isAdmin"] = true end
-    -- data.name = MP.GetPlayerName(pid)
     MP.TriggerClientEventJson(pid, "BP_setPremium", data)
 end
 
@@ -157,7 +145,6 @@ function BP_setLiveryUsed(pid, data)
 
         local liveryID = parsed["selected_liveries"][vehType]
         if liveryID ~= nil then
-            -- print("LIVERY YEAHHHHHHH " .. liveryID)
             FS.CreateDirectory("livery_cache")
             local liveryUrl = BEAMPAINT_URL .. "/cdn/" .. liveryID .. "/livery.png"
             local liveryPath = "livery_cache/" .. liveryID .. ".png"
@@ -169,7 +156,6 @@ function BP_setLiveryUsed(pid, data)
             TEXTURE_MAP[serverID] = { liveryID = liveryID, car = vehType }
 
             sendEveryoneLivery(serverID, liveryID)
-            -- initSendClientTextureData(pid, serverID, liveryID)
         end
     end
 end
@@ -188,7 +174,6 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
         if identifiers["discord"] ~= nil then
             DISCORD_IDS[pname] = identifiers["discord"]
         else
-            -- table.insert(NOT_REGISTERED, pname)
             NOT_REGISTERED[pname] = true
         end
     end
@@ -246,4 +231,3 @@ MP.RegisterEvent("onVehicleDeleted", "onVehicleDeleted")
 MP.RegisterEvent("onPlayerJoining", "onPlayerJoining")
 MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
 MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
--- MP.RegisterEvent("BP_requestVehRole", "BP_requestVehRole")
