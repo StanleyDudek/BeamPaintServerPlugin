@@ -1,7 +1,7 @@
 local base64 = require("base64")
 
 -- local BEAMPAINT_URL = "http://127.0.0.1:3030"
-local BEAMPAINT_URL = "https://beampaint.com"
+local BEAMPAINT_URL = "https://beampaint.com/api/v1"
 
 -- Maximum amount of bytes sent as values in JSON message
 local MAX_DATA_VALUES_PP = 12000
@@ -146,7 +146,7 @@ function BP_setLiveryUsed(pid, data)
         local liveryID = parsed["selected_liveries"][vehType]
         if liveryID ~= nil then
             FS.CreateDirectory("livery_cache")
-            local liveryUrl = BEAMPAINT_URL .. "/cdn/" .. liveryID .. "/livery.png"
+            local liveryUrl = BEAMPAINT_URL .. "/livery/" .. liveryID .. "/livery.png"
             local liveryPath = "livery_cache/" .. liveryID .. ".png"
             httpRequestSaveFile(liveryUrl, liveryPath)
             local inp = io.open(liveryPath, "rb")
