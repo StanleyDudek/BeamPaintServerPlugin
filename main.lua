@@ -67,7 +67,7 @@ local function sendClientTextureData(pid, target_id)
     local raw = LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]:sub(data.raw_offset + 1, math.min(data.raw_offset + MAX_DATA_VALUES_PP, #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]))
     data.raw = base64.encode(raw)
     MP.TriggerClientEventJson(pid, "BP_receiveTextureData", data)
-    print("Sent client (" .. pid .. ") texture data (" .. #data.raw .. " bytes)!")
+    Util.LogDebug("Sent client (" .. pid .. ") texture data (" .. #data.raw .. " bytes)!")
     TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress = TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress + MAX_DATA_VALUES_PP
 end
 
@@ -106,7 +106,7 @@ function BP_textureDataReceived(pid, target_id)
 end
 
 function BP_clientReady(pid)
-    print("Client (" .. pid .. ") has marked itself as ready")
+    Util.LogDebug("Client (" .. pid .. ") has marked itself as ready")
 
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
 
@@ -129,7 +129,7 @@ end
 function BP_setLiveryUsed(pid, data)
     local pname = MP.GetPlayerName(pid)
     if NOT_REGISTERED[pname] then
-        -- print("haha didnt register")
+        -- TODO: Do something? Inform the user, etc
     else
         local accountID = ACCOUNT_IDS[pname]
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
@@ -157,7 +157,7 @@ end
 
 function informRegistry(pid)
     if INFORMED[pid] == nil then
-        print("Informing client " .. pid .. " of BeamPaint registry")
+        Util.LogDebug("Informing client " .. pid .. " of BeamPaint registry")
         INFORMED[pid] = true
 
         MP.TriggerClientEvent(pid, "BP_informSignup", "")
@@ -194,10 +194,9 @@ function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
     local accountID = ACCOUNT_IDS[pname]
     if accountID then
-        print("pid: " .. pid)
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
-        print(resp)
         local parsed = Util.JsonDecode(resp)
+        Util.LogDebug(parsed)
 
         local isAdmin = parsed["admin"] or false
         local hasPremium = parsed["premium"] or false
