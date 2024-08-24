@@ -101,7 +101,6 @@ function BP_textureDataReceived(pid, target_id)
     if TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress < #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id] then
         sendClientTextureData(pid, target_id)
     else
-        print("Client is done!")
         MP.TriggerClientEventJson(pid, "BP_markTextureComplete", { target_id = target_id })
     end
 end
@@ -122,7 +121,6 @@ function BP_clientReady(pid)
 
     for tpid, role in pairs(ROLE_MAP) do
         for tvid, vdata in pairs(MP.GetPlayerVehicles(tpid) or {}) do
-            print("hi " .. tpid .. "-" .. tvid)
             updatePlayerRole(pid, tpid, tvid)
         end
     end
@@ -131,14 +129,11 @@ end
 function BP_setLiveryUsed(pid, data)
     local pname = MP.GetPlayerName(pid)
     if NOT_REGISTERED[pname] then
-        print("haha didnt register")
+        -- print("haha didnt register")
     else
-        local discordID = ACCOUNT_IDS[pname]
-        print("pid: " .. pid)
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. discordID)
-        print(resp)
+        local accountID = ACCOUNT_IDS[pname]
+        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
         local parsed = Util.JsonDecode(resp)
-        print(parsed)
         local split = strsplit(data, ";")
         local serverID = split[1]
         local vehType = split[2]
@@ -171,8 +166,8 @@ end
 
 function onPlayerAuth(pname, prole, is_guest, identifiers)
     if not is_guest then
-        if identifiers["discord"] ~= nil then
-            local discordID = identifiers["discord"]
+        local discordID = identifiers["discord"]
+        if discordID then
             local accountID = httpRequest(BEAMPAINT_URL .. "/discord2id/" .. discordID)
             if #accountID == 0 then
                 accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
@@ -185,17 +180,22 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
                 ACCOUNT_IDS[pname] = accountID
             end
         else
-            NOT_REGISTERED[pname] = true
+            local accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+            if #accountID == 0 then
+                NOT_REGISTERED[pname] = true
+            else
+                ACCOUNT_IDS[pname] = accountID
+            end
         end
     end
 end
 
 function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
-    local discordID = ACCOUNT_IDS[pname]
-    if discordID then
+    local accountID = ACCOUNT_IDS[pname]
+    if accountID then
         print("pid: " .. pid)
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. discordID)
+        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
         print(resp)
         local parsed = Util.JsonDecode(resp)
 
