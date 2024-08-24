@@ -173,9 +173,14 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
     if not is_guest then
         if identifiers["discord"] ~= nil then
             local discordID = identifiers["discord"]
-            local accountID = httpRequest(BEAMPAINT_URL .. "/user2id/" .. discordID)
+            local accountID = httpRequest(BEAMPAINT_URL .. "/discord2id/" .. discordID)
             if #accountID == 0 then
-                NOT_REGISTERED[pname] = true
+                accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+                if #accountID == 0 then
+                    NOT_REGISTERED[pname] = true
+                else
+                    ACCOUNT_IDS[pname] = accountID
+                end
             else
                 ACCOUNT_IDS[pname] = accountID
             end
