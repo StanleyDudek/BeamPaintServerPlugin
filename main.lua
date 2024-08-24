@@ -1,7 +1,7 @@
 local base64 = require("base64")
 
--- local BEAMPAINT_URL = "http://127.0.0.1:3030"
-local BEAMPAINT_URL = "https://beampaint.com/api/v1"
+-- local BEAMPAINT_URL = "http://127.0.0.1:3030/api/v2"
+local BEAMPAINT_URL = "https://beampaint.com/api/v2"
 
 -- Maximum amount of bytes sent as values in JSON message
 local MAX_DATA_VALUES_PP = 12000
@@ -10,7 +10,7 @@ local LIVERY_DATA = {}
 
 local TEXTURE_MAP = {}
 local TEXTURE_TRANSFER_PROGRESS = {}
-local DISCORD_IDS = {}
+local ACCOUNT_IDS = {}
 local NOT_REGISTERED = {}
 local INFORMED = {}
 
@@ -133,7 +133,7 @@ function BP_setLiveryUsed(pid, data)
     if NOT_REGISTERED[pname] then
         print("haha didnt register")
     else
-        local discordID = DISCORD_IDS[pname]
+        local discordID = ACCOUNT_IDS[pname]
         print("pid: " .. pid)
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. discordID)
         print(resp)
@@ -172,7 +172,13 @@ end
 function onPlayerAuth(pname, prole, is_guest, identifiers)
     if not is_guest then
         if identifiers["discord"] ~= nil then
-            DISCORD_IDS[pname] = identifiers["discord"]
+            local discordID = identifiers["discord"]
+            local accountID = httpRequest(BEAMPAINT_URL .. "/user2id/" .. discordID)
+            if #accountID == 0 then
+                NOT_REGISTERED[pname] = true
+            else
+                ACCOUNT_IDS[pname] = accountID
+            end
         else
             NOT_REGISTERED[pname] = true
         end
@@ -181,7 +187,7 @@ end
 
 function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
-    local discordID = DISCORD_IDS[pname]
+    local discordID = ACCOUNT_IDS[pname]
     if discordID then
         print("pid: " .. pid)
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. discordID)
