@@ -3,6 +3,8 @@ local base64 = require("base64")
 -- local BEAMPAINT_URL = "http://127.0.0.1:3030/api/v2"
 local BEAMPAINT_URL = "https://beampaint.com/api/v2"
 
+local config = {}
+
 -- Maximum amount of bytes sent as values in JSON message
 local MAX_DATA_VALUES_PP = 12000
 
@@ -60,6 +62,24 @@ local function strsplit(inputstr, sep)
     return t
 end
 
+local function loadConfig()
+    local file = io.open("beampaint_config.json", "r")
+    if file then
+        local content = file:read("*all")
+        file:close()
+        return Util.JsonDecode(content)
+    else
+        -- No config !!!
+        config = {}
+        config.useCustomRoles = true
+        config.showRegisterPopup = true
+        local file = io.open("beampaint_config.json", "w")
+        file:write(Util.JsonPrettify(Util.JsonEncode(config)))
+        file:flush()
+        file:close()
+    end
+end
+
 local function sendClientTextureData(pid, target_id)
     local data = {}
     data.target_id = target_id
@@ -84,6 +104,7 @@ function sendEveryoneLivery(serverID, liveryID)
 end
 
 function updatePlayerRole(pid, targetPid, targetVid)
+    if not config.useCustomRoles then return end
     if ROLE_MAP[targetPid] == nil then return end
     local data = {}
     data.tid = "" .. targetPid .. "-" .. targetVid
@@ -156,6 +177,7 @@ function BP_setLiveryUsed(pid, data)
 end
 
 function informRegistry(pid)
+    if not config.showRegisterPopup then return end
     if INFORMED[pid] == nil then
         Util.LogDebug("Informing client " .. pid .. " of BeamPaint registry")
         INFORMED[pid] = true
@@ -220,6 +242,8 @@ function onVehicleSpawn(tpid, tvid)
 end
 
 function onInit()
+    loadConfig()
+
     for pid, pname in pairs(MP.GetPlayers()) do
         local role = "" -- We don't use this anyway :3
         local is_guest = MP.IsPlayerGuest(pid)
