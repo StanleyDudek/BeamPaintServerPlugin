@@ -1,5 +1,11 @@
 local base64 = require("base64")
 
+-- Fix support for older servers (certain hosts have not updated yet)
+if not Util.LogDebug then
+    print("This BeamMP server is outdated! Patching Util.LogDebug to point to print instead!")
+    Util.LogDebug = print
+end
+
 -- local BEAMPAINT_URL = "http://127.0.0.1:3030/api/v2"
 local BEAMPAINT_URL = "https://beampaint.com/api/v2"
 
@@ -67,7 +73,7 @@ local function loadConfig()
     if file then
         local content = file:read("*all")
         file:close()
-        return Util.JsonDecode(content)
+        config = Util.JsonDecode(content)
     else
         -- No config !!!
         config = {}
