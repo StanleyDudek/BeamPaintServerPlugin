@@ -20,7 +20,6 @@ local TEXTURE_MAP = {}
 local TEXTURE_TRANSFER_PROGRESS = {}
 local ACCOUNT_IDS = {}
 local NOT_REGISTERED = {}
-local INFORMED = {}
 
 local ROLE_MAP = {}
 
@@ -137,11 +136,6 @@ function BP_clientReady(pid)
 
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
 
-    local pname = MP.GetPlayerName(pid)
-    if NOT_REGISTERED[pname] then
-        informRegistry(pid)
-    end
-
     for serverID, liveryData in pairs(TEXTURE_MAP) do
         initSendClientTextureData(pid, serverID, liveryData.liveryID)
     end
@@ -156,7 +150,7 @@ end
 function BP_setLiveryUsed(pid, data)
     local pname = MP.GetPlayerName(pid)
     if NOT_REGISTERED[pname] then
-        -- TODO: Do something? Inform the user, etc
+        informRegistry(pid)
     else
         local accountID = ACCOUNT_IDS[pname]
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
@@ -184,12 +178,8 @@ end
 
 function informRegistry(pid)
     if not config.showRegisterPopup then return end
-    if INFORMED[pid] == nil then
-        Util.LogDebug("Informing client " .. pid .. " of BeamPaint registry")
-        INFORMED[pid] = true
-
-        MP.TriggerClientEvent(pid, "BP_informSignup", "")
-    end
+    Util.LogDebug("Informing client " .. pid .. " of BeamPaint registry")
+    MP.TriggerClientEvent(pid, "BP_informSignup", "")
 end
 
 function onPlayerAuth(pname, prole, is_guest, identifiers)
