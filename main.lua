@@ -1,9 +1,9 @@
 local base64 = require("base64")
 
 -- Fix support for older servers (certain hosts have not updated yet)
-if not Util.LogDebug then
-    print("This BeamMP server is outdated! Patching Util.LogDebug to point to print instead!")
-    Util.LogDebug = print
+if not Util.LogInfo then
+    print("This BeamMP server is outdated! Patching Util.LogInfo to point to print instead!")
+    Util.LogInfo = print
 end
 
 -- local BEAMPAINT_URL = "http://127.0.0.1:3030/api/v2"
@@ -83,6 +83,21 @@ local function loadConfig()
         file:flush()
         file:close()
     end
+
+    -- Read environment variables
+    local useCustomRolesEnv = os.getenv("BP_USE_CUSTOM_ROLES")
+    if useCustomRolesEnv then
+        Util.LogInfo("Found ENV variable `USE_CUSTOM_ROLES`, using this instead of config value!")
+        local v = useCustomRolesEnv == "1" or useCustomRolesEnv == "TRUE" or useCustomRolesEnv == "true"
+        config.useCustomRoles = v
+    end
+
+    local showRegisterPopupEnv = os.getenv("BP_SHOW_REGISTER_POPUP")
+    if showRegisterPopupEnv then
+        Util.LogInfo("Found ENV variable `BP_SHOW_REGISTER_POPUP`, using this instead of config value!")
+        local v = showRegisterPopupEnv == "1" or showRegisterPopupEnv == "TRUE" or showRegisterPopupEnv == "true"
+        config.showRegisterPopup = v
+    end
 end
 
 local function sendClientTextureData(pid, target_id)
@@ -92,7 +107,7 @@ local function sendClientTextureData(pid, target_id)
     local raw = LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]:sub(data.raw_offset + 1, math.min(data.raw_offset + MAX_DATA_VALUES_PP, #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]))
     data.raw = base64.encode(raw)
     MP.TriggerClientEventJson(pid, "BP_receiveTextureData", data)
-    Util.LogDebug("Sent client (" .. pid .. ") texture data (" .. #data.raw .. " bytes)!")
+    Util.LogInfo("Sent client (" .. pid .. ") texture data (" .. #data.raw .. " bytes)!")
     TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress = TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress + MAX_DATA_VALUES_PP
 end
 
@@ -132,7 +147,7 @@ function BP_textureDataReceived(pid, target_id)
 end
 
 function BP_clientReady(pid)
-    Util.LogDebug("Client (" .. pid .. ") has marked itself as ready")
+    Util.LogInfo("Client (" .. pid .. ") has marked itself as ready")
 
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
 
@@ -178,7 +193,7 @@ end
 
 function informRegistry(pid)
     if not config.showRegisterPopup then return end
-    Util.LogDebug("Informing client " .. pid .. " of BeamPaint registry")
+    Util.LogInfo("Informing client " .. pid .. " of BeamPaint registry")
     MP.TriggerClientEvent(pid, "BP_informSignup", "")
 end
 
@@ -214,7 +229,7 @@ function onPlayerJoining(pid)
     if accountID then
         local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
         local parsed = Util.JsonDecode(resp)
-        Util.LogDebug(parsed)
+        Util.LogInfo(parsed)
 
         local isAdmin = parsed["admin"] or false
         local hasPremium = parsed["premium"] or false
