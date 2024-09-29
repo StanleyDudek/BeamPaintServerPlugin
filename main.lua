@@ -131,9 +131,12 @@ local function sendClientTextureData(pid, target_id)
 end
 
 function initSendClientTextureData(pid, target_id, livery_id)
+    local thiscall = "initSendClientTextureData("..tostring(pid)..","..tostring(target_id)..","..tostring(livery_id) .. ")"
+    Util.DebugStartProfile(thiscall)
     TEXTURE_TRANSFER_PROGRESS[pid] = TEXTURE_TRANSFER_PROGRESS[pid] or {}
     TEXTURE_TRANSFER_PROGRESS[pid][target_id] = { progress = 0, livery_id = livery_id }
     sendClientTextureData(pid, target_id)
+    Util.DebugStopProfile(thiscall)
 end
 
 function sendEveryoneLivery(serverID, liveryID)
