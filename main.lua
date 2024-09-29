@@ -1,5 +1,7 @@
 local base64 = require("base64")
 
+local SERVER_VERSION_MAJOR, SERVER_VERSION_MINOR, SERVER_VERSION_PATCH = MP.GetServerVersion()
+
 -- Fix support for older servers (certain hosts have not updated yet)
 if not Util.LogInfo then
     print("This BeamMP server is outdated! Patching Util.LogInfo to point to print instead!")
@@ -13,6 +15,10 @@ local config = {}
 
 -- Maximum amount of bytes sent as values in JSON message
 local MAX_DATA_VALUES_PP = 12000
+-- The launcher still limits the incoming data so this does NOT work!
+-- if SERVER_VERSION_MAJOR >= 3 and SERVER_VERSION_MINOR >= 5 then
+--     MAX_DATA_VALUES_PP = 20000
+-- end
 
 local LIVERY_DATA = {}
 
@@ -22,6 +28,7 @@ local ACCOUNT_IDS = {}
 local NOT_REGISTERED = {}
 
 local ROLE_MAP = {}
+local EXISTING_ROLES = {}
 
 -- Thanks Bouboule for this function
 function httpRequest(url)
@@ -107,7 +114,6 @@ local function sendClientTextureData(pid, target_id)
     local raw = LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]:sub(data.raw_offset + 1, math.min(data.raw_offset + MAX_DATA_VALUES_PP, #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id]))
     data.raw = base64.encode(raw)
     MP.TriggerClientEventJson(pid, "BP_receiveTextureData", data)
-    Util.LogInfo("Sent client (" .. pid .. ") texture data (" .. #data.raw .. " bytes)!")
     TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress = TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress + MAX_DATA_VALUES_PP
 end
 
@@ -126,6 +132,7 @@ end
 function updatePlayerRole(pid, targetPid, targetVid)
     if not config.useCustomRoles then return end
     if ROLE_MAP[targetPid] == nil then return end
+    if EXISTING_ROLES[MP.GetPlayerName(pid)] ~= nil then return end
     local data = {}
     data.tid = "" .. targetPid .. "-" .. targetVid
     if ROLE_MAP[targetPid] == "admin" then data["isAdmin"] = true end
@@ -147,8 +154,6 @@ function BP_textureDataReceived(pid, target_id)
 end
 
 function BP_clientReady(pid)
-    Util.LogInfo("Client (" .. pid .. ") has marked itself as ready")
-
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
 
     for serverID, liveryData in pairs(TEXTURE_MAP) do
@@ -193,12 +198,12 @@ end
 
 function informRegistry(pid)
     if not config.showRegisterPopup then return end
-    Util.LogInfo("Informing client " .. pid .. " of BeamPaint registry")
     MP.TriggerClientEvent(pid, "BP_informSignup", "")
 end
 
 function onPlayerAuth(pname, prole, is_guest, identifiers)
     if not is_guest then
+        EXISTING_ROLES[pname] = prole
         local discordID = identifiers["discord"]
         if discordID then
             local accountID = httpRequest(BEAMPAINT_URL .. "/discord2id/" .. discordID)
@@ -252,11 +257,17 @@ function onVehicleSpawn(tpid, tvid)
     updatePlayerRoleAll(tpid, tvid)
 end
 
+function postVehicleSpawn(allowed, tpid, tvid)
+    if allowed then
+        updatePlayerRoleAll(tpid, tvid)
+    end
+end
+
 function onInit()
     loadConfig()
 
     for pid, pname in pairs(MP.GetPlayers()) do
-        local role = "" -- We don't use this anyway :3
+        local role = EXISTING_ROLES[pname]
         local is_guest = MP.IsPlayerGuest(pid)
         local identifiers = MP.GetPlayerIdentifiers(pid)
         onPlayerAuth(pname, role, is_guest, identifiers)
@@ -275,4 +286,9 @@ MP.RegisterEvent("onPlayerAuth", "onPlayerAuth")
 MP.RegisterEvent("onVehicleDeleted", "onVehicleDeleted")
 MP.RegisterEvent("onPlayerJoining", "onPlayerJoining")
 MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
-MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
+
+if SERVER_VERSION_MAJOR >= 3 and SERVER_VERSION_MINOR >= 5 then
+    MP.RegisterEvent("postVehicleSpawn", "postVehicleSpawn")
+else
+    MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
+end
