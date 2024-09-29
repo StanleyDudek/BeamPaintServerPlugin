@@ -7,6 +7,10 @@ if not Util.LogInfo then
     print("This BeamMP server is outdated! Patching Util.LogInfo to point to print instead!")
     Util.LogInfo = print
 end
+if not Util.LogError then
+    print("This BeamMP server is outdated! Patching Util.LogError to point to print instead!")
+    Util.LogError = print
+end
 
 -- local BEAMPAINT_URL = "http://127.0.0.1:3030/api/v2"
 local BEAMPAINT_URL = "https://beampaint.com/api/v2"
@@ -30,37 +34,42 @@ local NOT_REGISTERED = {}
 local ROLE_MAP = {}
 local EXISTING_ROLES = {}
 
--- Thanks Bouboule for this function
-function httpRequest(url)
-    local response = ""
-
+local function httpGetToFile(url, outputFile)
+    local ok, err, n
     if MP.GetOSName() == "Windows" then
-        response = os.execute('powershell -Command "Invoke-WebRequest -Uri ' .. url .. ' -OutFile temp.txt"')
+        ok, err, n = os.execute('powershell -Command "Invoke-WebRequest -Uri \\"' .. url .. '\\" -OutFile \\"' .. outputFile .. '\\""')
     else
-        response = os.execute("wget -q -O temp.txt " .. url)
+        ok, err, n = os.execute("curl \"" .. url .. "\" --compressed --no-progress-meter >\"" .. outputFile .. "\"")
+        if not ok then
+            ok, err, n = os.execute("wget -q -O \"" .. outputFile .. "\" \"" .. url .. "\"")
+        end
     end
-
-    if response then
-        local file = io.open("temp.txt", "r")
-        local content = file:read("*all")
-        file:close()
-        os.remove("temp.txt")
-        return content
-    else
+    if not ok then
+        Util.LogError("Failed to query URL '" .. url .. "': " .. err .. " (" .. tostring(n) .. ")")
         return nil
+    else
+        return true
     end
 end
 
-function httpRequestSaveFile(url, filename)
-    local response = ""
-
-    if MP.GetOSName() == "Windows" then
-        response = os.execute('powershell -Command "Invoke-WebRequest -Uri ' .. url .. ' -OutFile ' .. filename .. '"')
+-- Returns the body of a GET to the given url
+local function httpGet(url)
+    local outputFile = "temp_" .. tostring(os.clock()) .. tostring(Util.RandomIntRange(1, 100000)) .. ".txt"
+    local ok = httpGetToFile(url, outputFile)
+    if not ok then
+        Util.LogError("Failed to query URL '" .. url .. "': " .. err .. " (" .. tostring(n) .. ")")
+        return nil
     else
-        response = os.execute("wget -q -O " .. filename .. " " .. url)
+        local file = io.open(outputFile, "r")
+        if not file then
+            Util.LogError("Failed to query URL '" .. url .. "': Output file not found!")
+            return nil
+        end
+        local content = file:read("*all")
+        file:close()
+        os.remove(outputFile)
+        return content
     end
-
-    return response
 end
 
 local function strsplit(inputstr, sep)
@@ -86,6 +95,10 @@ local function loadConfig()
         config.useCustomRoles = true
         config.showRegisterPopup = true
         local file = io.open("beampaint_config.json", "w")
+        if not file then
+            Util.LogError("Failed to create beampaint_config.json! Please make sure the server has permission to read/write files")
+            return
+        end
         file:write(Util.JsonPrettify(Util.JsonEncode(config)))
         file:flush()
         file:close()
@@ -173,7 +186,11 @@ function BP_setLiveryUsed(pid, data)
         informRegistry(pid)
     else
         local accountID = ACCOUNT_IDS[pname]
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
+        local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
+        if not resp then
+            Util.LogError("Failed to get livery for " .. tostring(pid) .. " because the GET request failed")
+            return
+        end
         local parsed = Util.JsonDecode(resp)
         local split = strsplit(data, ";")
         local serverID = split[1]
@@ -184,8 +201,16 @@ function BP_setLiveryUsed(pid, data)
             FS.CreateDirectory("livery_cache")
             local liveryUrl = BEAMPAINT_URL .. "/livery/" .. liveryID .. "/livery.png"
             local liveryPath = "livery_cache/" .. liveryID .. ".png"
-            httpRequestSaveFile(liveryUrl, liveryPath)
+            local ok = httpGetToFile(liveryUrl, liveryPath)
+            if not ok then
+                Util.LogError("Failed to save livery '" .. liveryID .. "' to file '" .. liveryPath .. "'")
+                return
+            end
             local inp = io.open(liveryPath, "rb")
+            if not inp then
+                Util.LogError("Failed to open livery path '" .. liveryPath .. "'")
+                return
+            end
             LIVERY_DATA[liveryID] = inp:read("*all")
             inp:close()
             os.remove(liveryPath)
@@ -206,9 +231,17 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
         EXISTING_ROLES[pname] = prole
         local discordID = identifiers["discord"]
         if discordID then
-            local accountID = httpRequest(BEAMPAINT_URL .. "/discord2id/" .. discordID)
+            local accountID = httpGet(BEAMPAINT_URL .. "/discord2id/" .. discordID)
+            if not accountID then
+                Util.LogError("Failed to get account ID (discord2id) due to failed GET request for player with discord ID '" .. tostring(discordID) .. "' (player '" .. pname .. "')")
+                return
+            end
             if #accountID == 0 then
-                accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+                accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+                if not accountID then
+                    Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "')")
+                    return
+                end
                 if #accountID == 0 then
                     NOT_REGISTERED[pname] = true
                 else
@@ -218,7 +251,11 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
                 ACCOUNT_IDS[pname] = accountID
             end
         else
-            local accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+            local accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+            if not accountID then
+                Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "'). Didn't try discord ID since the player doesn't have a linked discord account.")
+                return
+            end
             if #accountID == 0 then
                 NOT_REGISTERED[pname] = true
             else
@@ -232,7 +269,11 @@ function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
     local accountID = ACCOUNT_IDS[pname]
     if accountID then
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
+        local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
+        if not resp then
+            Util.LogError("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
+            return
+        end
         local parsed = Util.JsonDecode(resp)
         Util.LogInfo(parsed)
 
