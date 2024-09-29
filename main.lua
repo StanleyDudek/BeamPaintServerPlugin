@@ -333,3 +333,18 @@ if SERVER_VERSION_MAJOR >= 3 and SERVER_VERSION_MINOR >= 5 then
 else
     MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
 end
+
+function printDebugExecutionTime()
+    local stats = Util.DebugExecutionTime()
+    local pretty = "DebugExecutionTime:\n"
+    local longest = 0
+    for name, t in pairs(stats) do
+        if #name > longest then
+            longest = #name
+        end
+    end
+    for name, t in pairs(stats) do
+        pretty = pretty .. string.format("%" .. longest + 1 .. "s: %12f +/- %12f (min: %12f, max: %12f) (called %d time(s))\n", name, t.mean, t.stdev, t.min, t.max, t.n)
+    end
+    print(pretty)
+end
