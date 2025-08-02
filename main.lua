@@ -1,3 +1,6 @@
+-- Server Plugin which handles communication between the BeamPaint website (beampaint.com) and the clients.
+-- SPDX-License-Identifier: AGPL-3.0-only
+
 local base64 = require("base64")
 
 local SERVER_VERSION_MAJOR, SERVER_VERSION_MINOR, SERVER_VERSION_PATCH = MP.GetServerVersion()
