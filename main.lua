@@ -89,9 +89,13 @@ local function loadConfig()
         config.useCustomRoles = true
         config.showRegisterPopup = true
         local file = io.open("beampaint_config.json", "w")
-        file:write(Util.JsonPrettify(Util.JsonEncode(config)))
-        file:flush()
-        file:close()
+        if file then
+            file:write(Util.JsonPrettify(Util.JsonEncode(config)))
+            file:flush()
+            file:close()
+        else
+            Util.LogInfo("Could not write config file!")
+        end
     end
 
     -- Read environment variables
@@ -152,7 +156,7 @@ function BP_textureDataReceived(pid, target_id)
     if TEXTURE_TRANSFER_PROGRESS[pid][target_id].progress < #LIVERY_DATA[TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id] then
         sendClientTextureData(pid, target_id)
     else
-        MP.TriggerClientEventJson(pid, "BP_markTextureComplete", { target_id = target_id })
+        MP.TriggerClientEventJson(pid, "BP_markTextureComplete", { target_id = target_id, livery_id = TEXTURE_TRANSFER_PROGRESS[pid][target_id].livery_id })
     end
 end
 
@@ -189,8 +193,10 @@ function BP_setLiveryUsed(pid, data)
             local liveryPath = "livery_cache/" .. liveryID .. ".png"
             httpRequestSaveFile(liveryUrl, liveryPath)
             local inp = io.open(liveryPath, "rb")
-            LIVERY_DATA[liveryID] = inp:read("*all")
-            inp:close()
+            if inp then
+                LIVERY_DATA[liveryID] = inp:read("*all")
+                inp:close()
+            end
             os.remove(liveryPath)
             TEXTURE_MAP[serverID] = { liveryID = liveryID, car = vehType }
 
