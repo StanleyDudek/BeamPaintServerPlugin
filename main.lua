@@ -195,12 +195,12 @@ end
 function BP_cachedLiveryReport(pid, data)
     local cachedLiveries = Util.JsonDecode(data)
     PLAYER_LIVERY_CACHE[pid] = cachedLiveries
-    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "")
+    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "report")
 end
 
 function BP_cachedLiveryUpdate(pid, hash)
     table.insert(PLAYER_LIVERY_CACHE[pid], hash)
-    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "")
+    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "update")
 end
 
 function BP_setLiveryUsed(pid, data)
