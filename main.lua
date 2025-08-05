@@ -33,37 +33,45 @@ local NOT_REGISTERED = {}
 local ROLE_MAP = {}
 local EXISTING_ROLES = {}
 
--- Thanks Bouboule for this function
-function httpRequest(url)
-    local response = ""
+local PLAYER_LIVERY_CACHE = {}
 
+local function httpGetToFile(url, outputFile)
+    local ok, err, n
     if MP.GetOSName() == "Windows" then
-        response = os.execute('powershell -Command "Invoke-WebRequest -Uri ' .. url .. ' -OutFile temp.txt"')
+        ok, err, n = os.execute('powershell -Command "Invoke-WebRequest -Uri \\"' .. url .. '\\" -OutFile \\"' .. outputFile .. '\\""')
     else
-        response = os.execute("wget -q -O temp.txt " .. url)
+        ok, err, n = os.execute("curl \"" .. url .. "\" --compressed --no-progress-meter >\"" .. outputFile .. "\"")
+        if not ok then
+            ok, err, n = os.execute("wget -q -O \"" .. outputFile .. "\" \"" .. url .. "\"")
+        end
     end
-
-    if response then
-        local file = io.open("temp.txt", "r")
-        local content = file:read("*all")
-        file:close()
-        os.remove("temp.txt")
-        return content
-    else
+    if not ok then
+        Util.LogError("Failed to query URL '" .. url .. "': " .. err .. " (" .. tostring(n) .. ")")
         return nil
+    else
+        return true
     end
 end
 
-function httpRequestSaveFile(url, filename)
-    local response = ""
-
-    if MP.GetOSName() == "Windows" then
-        response = os.execute('powershell -Command "Invoke-WebRequest -Uri ' .. url .. ' -OutFile ' .. filename .. '"')
+-- Returns the body of a GET to the given url
+local function httpGet(url)
+    local outputFile = "temp_" .. tostring(os.clock()) .. tostring(Util.RandomIntRange(1, 100000)) .. ".txt"
+    local ok = httpGetToFile(url, outputFile)
+    if not ok then
+        Util.LogError("Failed to query URL '" .. url .. "': Output file not found!")
+        return nil
     else
-        response = os.execute("wget -q -O " .. filename .. " " .. url)
+        local file = io.open(outputFile, "r")
+        if file then
+            local content = file:read("*all")
+            file:close()
+            os.remove(outputFile)
+            return content
+        else
+            Util.LogError("Failed to query URL '" .. url .. "': Output file not found!")
+            return nil
+        end
     end
-
-    return response
 end
 
 local function strsplit(inputstr, sep)
@@ -88,16 +96,16 @@ local function loadConfig()
         config = {}
         config.useCustomRoles = true
         config.showRegisterPopup = true
-        local file = io.open("beampaint_config.json", "w")
+        file = io.open("beampaint_config.json", "w")
         if file then
             file:write(Util.JsonPrettify(Util.JsonEncode(config)))
             file:flush()
             file:close()
         else
-            Util.LogInfo("Could not write config file!")
+            Util.LogError("Failed to create beampaint_config.json! Please make sure the server has permission to read/write files")
+            return
         end
     end
-
     -- Read environment variables
     local useCustomRolesEnv = os.getenv("BP_USE_CUSTOM_ROLES")
     if useCustomRolesEnv then
@@ -105,7 +113,6 @@ local function loadConfig()
         local v = useCustomRolesEnv == "1" or useCustomRolesEnv == "TRUE" or useCustomRolesEnv == "true"
         config.useCustomRoles = v
     end
-
     local showRegisterPopupEnv = os.getenv("BP_SHOW_REGISTER_POPUP")
     if showRegisterPopupEnv then
         Util.LogInfo("Found ENV variable `BP_SHOW_REGISTER_POPUP`, using this instead of config value!")
@@ -132,7 +139,16 @@ end
 
 function sendEveryoneLivery(serverID, liveryID)
     for pid, pname in pairs(MP.GetPlayers()) do
-        initSendClientTextureData(pid, serverID, liveryID)
+        local cached = false
+        for _, hash in pairs(PLAYER_LIVERY_CACHE[pid]) do
+            if hash == liveryID then
+                MP.TriggerClientEventJson(pid, "BP_textureSkip", {target_id = serverID, livery_id = liveryID} )
+                cached = true
+            end
+        end
+        if not cached then
+            initSendClientTextureData(pid, serverID, liveryID)
+        end
     end
 end
 
@@ -162,16 +178,29 @@ end
 
 function BP_clientReady(pid)
     TEXTURE_TRANSFER_PROGRESS[pid] = {}
-
     for serverID, liveryData in pairs(TEXTURE_MAP) do
-        initSendClientTextureData(pid, serverID, liveryData.liveryID)
+        if PLAYER_LIVERY_CACHE[pid][liveryData.liveryID] then
+            MP.TriggerClientEventJson(pid, "BP_textureSkip", Util.JsonEncode({target_id = serverID, livery_id = liveryData.liveryID}))
+        else
+            initSendClientTextureData(pid, serverID, liveryData.liveryID)
+        end
     end
-
     for tpid, role in pairs(ROLE_MAP) do
         for tvid, vdata in pairs(MP.GetPlayerVehicles(tpid) or {}) do
             updatePlayerRole(pid, tpid, tvid)
         end
     end
+end
+
+function BP_cachedLiveryReport(pid, data)
+    local cachedLiveries = Util.JsonDecode(data)
+    PLAYER_LIVERY_CACHE[pid] = cachedLiveries
+    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "")
+end
+
+function BP_cachedLiveryUpdate(pid, hash)
+    table.insert(PLAYER_LIVERY_CACHE[pid], hash)
+    MP.TriggerClientEvent(pid, "BP_cacheUpdateComplete", "")
 end
 
 function BP_setLiveryUsed(pid, data)
@@ -180,26 +209,35 @@ function BP_setLiveryUsed(pid, data)
         informRegistry(pid)
     else
         local accountID = ACCOUNT_IDS[pname]
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
+        local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
+        if not resp then
+            Util.LogError("Failed to get livery for " .. tostring(pid) .. " because the GET request failed")
+            return
+        end
         local parsed = Util.JsonDecode(resp)
         local split = strsplit(data, ";")
         local serverID = split[1]
         local vehType = split[2]
-
         local liveryID = parsed["selected_liveries"][vehType]
         if liveryID ~= nil then
             FS.CreateDirectory("livery_cache")
             local liveryUrl = BEAMPAINT_URL .. "/livery/" .. liveryID .. "/livery.png"
             local liveryPath = "livery_cache/" .. liveryID .. ".png"
-            httpRequestSaveFile(liveryUrl, liveryPath)
+            local ok = httpGetToFile(liveryUrl, liveryPath)
+            if not ok then
+                Util.LogError("Failed to save livery '" .. liveryID .. "' to file '" .. liveryPath .. "'")
+                return
+            end
             local inp = io.open(liveryPath, "rb")
             if inp then
                 LIVERY_DATA[liveryID] = inp:read("*all")
-                inp:close()
+            else
+                Util.LogError("Failed to open livery path '" .. liveryPath .. "'")
+                return
             end
+            inp:close()
             os.remove(liveryPath)
             TEXTURE_MAP[serverID] = { liveryID = liveryID, car = vehType }
-
             sendEveryoneLivery(serverID, liveryID)
         end
     end
@@ -215,9 +253,17 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
         EXISTING_ROLES[pname] = prole
         local discordID = identifiers["discord"]
         if discordID then
-            local accountID = httpRequest(BEAMPAINT_URL .. "/discord2id/" .. discordID)
+            local accountID = httpGet(BEAMPAINT_URL .. "/discord2id/" .. discordID)
+            if not accountID then
+                Util.LogError("Failed to get account ID (discord2id) due to failed GET request for player with discord ID '" .. tostring(discordID) .. "' (player '" .. pname .. "')")
+                return
+            end
             if #accountID == 0 then
-                accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+                accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+                if not accountID then
+                    Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "')")
+                    return
+                end
                 if #accountID == 0 then
                     NOT_REGISTERED[pname] = true
                 else
@@ -227,9 +273,10 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
                 ACCOUNT_IDS[pname] = accountID
             end
         else
-            local accountID = httpRequest(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
-            if #accountID == 0 then
-                NOT_REGISTERED[pname] = true
+            local accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
+            if not accountID then
+                Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "'). Didn't try discord ID since the player doesn't have a linked discord account.")
+                return
             else
                 ACCOUNT_IDS[pname] = accountID
             end
@@ -241,20 +288,24 @@ function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
     local accountID = ACCOUNT_IDS[pname]
     if accountID then
-        local resp = httpRequest(BEAMPAINT_URL .. "/user/" .. accountID)
+        local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
+        if not resp then
+            Util.LogError("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
+            return
+        end
         local parsed = Util.JsonDecode(resp)
         Util.LogInfo(parsed)
-
         local isAdmin = parsed["admin"] or false
         local hasPremium = parsed["premium"] or false
-
         if hasPremium then ROLE_MAP[pid] = "premium" end
         if isAdmin then ROLE_MAP[pid] = "admin" end
+        PLAYER_LIVERY_CACHE[pid] = {}
     end
 end
 
 function onPlayerDisconnect(pid)
     ROLE_MAP[pid] = nil
+    PLAYER_LIVERY_CACHE[pid] = nil
 end
 
 function onVehicleDeleted(pid, vid)
@@ -274,14 +325,12 @@ end
 
 function onInit()
     loadConfig()
-
     for pid, pname in pairs(MP.GetPlayers()) do
         local role = EXISTING_ROLES[pname]
         local is_guest = MP.IsPlayerGuest(pid)
         local identifiers = MP.GetPlayerIdentifiers(pid)
         onPlayerAuth(pname, role, is_guest, identifiers)
     end
-
     for pid, pname in pairs(MP.GetPlayers()) do
         onPlayerJoining(pid)
     end
@@ -289,6 +338,8 @@ end
 
 MP.RegisterEvent("onInit", "onInit")
 MP.RegisterEvent("BP_clientReady", "BP_clientReady")
+MP.RegisterEvent("BP_cachedLiveryUpdate", "BP_cachedLiveryUpdate")
+MP.RegisterEvent("BP_cachedLiveryReport", "BP_cachedLiveryReport")
 MP.RegisterEvent("BP_setLiveryUsed", "BP_setLiveryUsed")
 MP.RegisterEvent("BP_textureDataReceived", "BP_textureDataReceived")
 MP.RegisterEvent("onPlayerAuth", "onPlayerAuth")
@@ -300,4 +351,19 @@ if SERVER_VERSION_MAJOR >= 3 and SERVER_VERSION_MINOR >= 5 then
     MP.RegisterEvent("postVehicleSpawn", "postVehicleSpawn")
 else
     MP.RegisterEvent("onVehicleSpawn", "onVehicleSpawn")
+end
+
+function printDebugExecutionTime()
+    local stats = Util.DebugExecutionTime()
+    local pretty = "DebugExecutionTime:\n"
+    local longest = 0
+    for name, t in pairs(stats) do
+        if #name > longest then
+            longest = #name
+        end
+    end
+    for name, t in pairs(stats) do
+        pretty = pretty .. string.format("%" .. longest + 1 .. "s: %12f +/- %12f (min: %12f, max: %12f) (called %d time(s))\n", name, t.mean, t.stdev, t.min, t.max, t.n)
+    end
+    print(pretty)
 end
