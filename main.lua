@@ -291,6 +291,7 @@ function onPlayerJoining(pid)
         local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
         if not resp then
             Util.LogError("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
+            NOT_REGISTERED[pname] = true
             return
         end
         local parsed = Util.JsonDecode(resp)
