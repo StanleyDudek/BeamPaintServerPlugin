@@ -289,21 +289,26 @@ end
 function onPlayerJoining(pid)
     local pname = MP.GetPlayerName(pid)
     local accountID = ACCOUNT_IDS[pname]
+    local resp
+    local parsed
     if accountID then
-        local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
-        if not resp then
+        resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
+        if resp then
+            parsed = Util.JsonDecode(resp)
+            Util.LogInfo(parsed)
+            local isAdmin = parsed["admin"] or false
+            local hasPremium = parsed["premium"] or false
+            if hasPremium then ROLE_MAP[pid] = "premium" end
+            if isAdmin then ROLE_MAP[pid] = "admin" end
+        else
             Util.LogWarn("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
+            parsed = Util.JsonDecode(resp)
             NOT_REGISTERED[pname] = true
-            return
         end
-        local parsed = Util.JsonDecode(resp)
-        Util.LogInfo(parsed)
-        local isAdmin = parsed["admin"] or false
-        local hasPremium = parsed["premium"] or false
-        if hasPremium then ROLE_MAP[pid] = "premium" end
-        if isAdmin then ROLE_MAP[pid] = "admin" end
-        PLAYER_LIVERY_CACHE[pid] = {}
+    else
+        NOT_REGISTERED[pname] = true
     end
+    PLAYER_LIVERY_CACHE[pid] = {}
 end
 
 function onPlayerDisconnect(pid)
