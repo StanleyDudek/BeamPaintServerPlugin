@@ -257,13 +257,13 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
         if discordID then
             local accountID = httpGet(BEAMPAINT_URL .. "/discord2id/" .. discordID)
             if not accountID then
-                Util.LogError("Failed to get account ID (discord2id) due to failed GET request for player with discord ID '" .. tostring(discordID) .. "' (player '" .. pname .. "')")
+                Util.LogWarn("Failed to get account ID (discord2id) due to failed GET request for player with discord ID '" .. tostring(discordID) .. "' (player '" .. pname .. "')")
                 return
             end
             if #accountID == 0 then
                 accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
                 if not accountID then
-                    Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "')")
+                    Util.LogWarn("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "')")
                     return
                 end
                 if #accountID == 0 then
@@ -276,8 +276,8 @@ function onPlayerAuth(pname, prole, is_guest, identifiers)
             end
         else
             local accountID = httpGet(BEAMPAINT_URL .. "/beammp2id/" .. identifiers["beammp"])
-            if not accountID then
-                Util.LogError("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "'). Didn't try discord ID since the player doesn't have a linked discord account.")
+            if #accountID == 0 then
+                Util.LogWarn("Failed to get account ID (beammp2id) due to failed GET request for player with BeamMP id '" .. tostring(identifiers["beammp"]) .. "' (player '" .. pname .. "'). Didn't try discord ID since the player doesn't have a linked discord account.")
                 return
             else
                 ACCOUNT_IDS[pname] = accountID
@@ -292,7 +292,7 @@ function onPlayerJoining(pid)
     if accountID then
         local resp = httpGet(BEAMPAINT_URL .. "/user/" .. accountID)
         if not resp then
-            Util.LogError("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
+            Util.LogWarn("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
             NOT_REGISTERED[pname] = true
             return
         end
