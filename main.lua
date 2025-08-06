@@ -140,10 +140,12 @@ end
 function sendEveryoneLivery(serverID, liveryID)
     for pid, pname in pairs(MP.GetPlayers()) do
         local cached = false
-        for _, hash in pairs(PLAYER_LIVERY_CACHE[pid]) do
-            if hash == liveryID then
-                MP.TriggerClientEventJson(pid, "BP_textureSkip", {target_id = serverID, livery_id = liveryID} )
-                cached = true
+        if PLAYER_LIVERY_CACHE[pid] then
+            for _, hash in pairs(PLAYER_LIVERY_CACHE[pid]) do
+                if hash == liveryID then
+                    MP.TriggerClientEventJson(pid, "BP_textureSkip", {target_id = serverID, livery_id = liveryID} )
+                    cached = true
+                end
             end
         end
         if not cached then
