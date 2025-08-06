@@ -302,7 +302,6 @@ function onPlayerJoining(pid)
             if isAdmin then ROLE_MAP[pid] = "admin" end
         else
             Util.LogWarn("Failed to get user info for account '" .. tostring(accountID) .. "' (pid " .. tostring(pid) .. ") due to failed GET request")
-            parsed = Util.JsonDecode(resp)
             NOT_REGISTERED[pname] = true
         end
     else
