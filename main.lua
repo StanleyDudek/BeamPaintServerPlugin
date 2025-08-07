@@ -309,6 +309,11 @@ end
 function onPlayerDisconnect(pid)
     ROLE_MAP[pid] = nil
     PLAYER_LIVERY_CACHE[pid] = nil
+
+    -- if a player is unregistered when they join, they'll still be marked as such even if they register
+    -- and rejoin. this prevents that by removing them from the not-registered list when they leave
+    local pname = MP.GetPlayerName(pid)
+    NOT_REGISTERED[pname] = nil
 end
 
 function onVehicleDeleted(pid, vid)
